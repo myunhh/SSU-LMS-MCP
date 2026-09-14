@@ -1,0 +1,1 @@
+Graph query confirms Settings.materials_dir feeds documents and downloads; manifest remains data_dir/material_manifest.json. Resolve cache paths against their recorded storage root. CLI/env path selection must leave session location unchanged.

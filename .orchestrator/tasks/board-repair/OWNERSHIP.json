@@ -1,0 +1,1 @@
+{"root":"C:/Users/picom/orca/LMS-MCP","worker":["src/ssu_lms_mcp/downloads.py","tests/test_downloads.py"],"main":["src/ssu_lms_mcp/urls.py","src/ssu_lms_mcp/board.py","src/ssu_lms_mcp/models.py","src/ssu_lms_mcp/server.py","tests/test_board.py","tests/test_protocol.py","README.md"],"forbidden":["credentials","global config","publishing"]}

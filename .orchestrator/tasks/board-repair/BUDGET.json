@@ -1,0 +1,1 @@
+{"tool_calls_per_worker":25,"retries":2,"fork_context":false,"escalation":"Return blockers to main; never cross ownership."}

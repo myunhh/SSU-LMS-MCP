@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ssu-lms": {
+      "command": "C:/tools/ssu-lms-mcp/.venv/Scripts/python.exe",
+      "args": ["-m", "ssu_lms_mcp", "serve"]
+    }
+  }
+}

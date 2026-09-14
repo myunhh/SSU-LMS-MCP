@@ -1,0 +1,24 @@
+{
+  "id": "board-attachments",
+  "context": "Approved M-sized feature. Live LMS evidence: course 48541 board tab 41, post 346081, attachment OS_01_Introduction_2026.pdf.",
+  "tasks": [
+    {
+      "id": "implementation",
+      "objective": "Expose board/API attachments and safely download selected board files.",
+      "category": "balanced",
+      "files": [
+        {"path": "src/ssu_lms_mcp/models.py"},
+        {"path": "src/ssu_lms_mcp/board.py"},
+        {"path": "src/ssu_lms_mcp/server.py"},
+        {"path": "src/ssu_lms_mcp/downloads.py"},
+        {"path": "src/ssu_lms_mcp/adapters/notices.py"},
+        {"path": "tests/test_board.py"},
+        {"path": "tests/test_protocol.py"},
+        {"path": "README.md"}
+      ],
+      "acceptance": ["python -m compileall -q src tests", "git diff --check"],
+      "maxToolCalls": 25,
+      "maxRetries": 2
+    }
+  ]
+}

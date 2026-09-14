@@ -1,0 +1,1 @@
+CLI --materials-dir wins over SSU_LMS_MATERIALS_DIR. Default unchanged. Custom root supports download/list/read/search plus preexisting documents. Escapes remain denied. Switching root cannot reuse old-root cached paths or discard permanent LTI launch history. Run pytest, ruff, build and independent review.

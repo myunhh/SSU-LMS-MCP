@@ -1,0 +1,13 @@
+.venv/
+.cache/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+session_state.json
+graphify-out/
+.omo/
