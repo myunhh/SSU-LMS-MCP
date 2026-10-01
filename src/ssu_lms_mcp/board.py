@@ -144,7 +144,7 @@ def _post(raw: dict, course_id: int, board: dict) -> BoardPost:
         url = item.get("url")
         attachments.append(NoticeAttachment(
             id=str(_positive_id(item.get("id"))),
-            name=str(item.get("filename") or "첨부파일"),
+            name=item.get("filename") if isinstance(item.get("filename"), str) else "",
             url=url if isinstance(url, str) and valid_url(url) else None,
             size=item.get("filesize"), content_type=item.get("content_type"),
         ))

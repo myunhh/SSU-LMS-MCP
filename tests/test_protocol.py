@@ -22,10 +22,21 @@ from ssu_lms_mcp.config import Settings
 from ssu_lms_mcp.models import Notice
 
 TOOL_NAMES = {
-    "session_status", "refresh_session", "list_courses", "list_assignments", "list_deadlines",
-    "list_notices", "list_materials", "list_discussions", "list_board_posts",
-    "download_material", "download_board_attachment", "list_files",
-    "read_file", "search_files", "storage_status",
+    "session_status",
+    "refresh_session",
+    "list_courses",
+    "list_assignments",
+    "list_deadlines",
+    "list_notices",
+    "list_materials",
+    "list_discussions",
+    "list_board_posts",
+    "download_material",
+    "download_board_attachment",
+    "list_files",
+    "read_file",
+    "search_files",
+    "storage_status",
 }
 
 
@@ -35,7 +46,9 @@ def _data(result):
         content = result.structuredContent
     else:
         content = json.loads(result.content[0].text)
-    return content["result"] if isinstance(content, dict) and set(content) == {"result"} else content
+    return (
+        content["result"] if isinstance(content, dict) and set(content) == {"result"} else content
+    )
 
 
 def _environment(data_dir):
@@ -99,7 +112,8 @@ async def test_stdio_custom_storage_existing_documents(tmp_path):
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "ssu_lms_mcp", "serve", "--materials-dir", str(root)],
-        env=_environment(state), cwd=str(tmp_path),
+        env=_environment(state),
+        cwd=str(tmp_path),
     )
     async with asyncio.timeout(30), stdio_client(params) as (read, write):
         async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=10)) as client:
@@ -114,6 +128,55 @@ async def test_stdio_custom_storage_existing_documents(tmp_path):
             assert "내 노트/lecture.txt" in json.dumps(found, ensure_ascii=False)
     assert not (state / "materials").exists()
     assert not (state / "session_state.json").exists()
+
+
+async def test_generated_config_runs_from_another_directory_without_login_secrets(tmp_path):
+    state = tmp_path / "private state"
+    materials = tmp_path / "강의 자료"
+    materials.mkdir()
+    (materials / "lecture.txt").write_text("설정으로 연결한 MCP 자료", encoding="utf-8")
+    env = {
+        **_environment(state),
+        "SSU_LMS_MATERIALS_DIR": str(materials),
+        "SSU_LMS_USERNAME": "username-canary",
+        "SSU_LMS_PASSWORD": "password-canary",
+    }
+    generated = subprocess.run(
+        [sys.executable, "-m", "ssu_lms_mcp", "config"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=15,
+    )
+    assert generated.returncode == 0, generated.stderr
+    assert "username-canary" not in generated.stdout + generated.stderr
+    assert "password-canary" not in generated.stdout + generated.stderr
+    entry = json.loads(generated.stdout)["mcpServers"]["ssu-lms"]
+    other = tmp_path / "client directory"
+    other.mkdir()
+    client_env = {
+        **_environment(tmp_path / "wrong state"),
+        "SSU_LMS_MATERIALS_DIR": str(tmp_path / "wrong materials"),
+        **entry["env"],
+    }
+    params = StdioServerParameters(
+        command=entry["command"],
+        args=entry["args"],
+        env=client_env,
+        cwd=str(other),
+    )
+    async with asyncio.timeout(30), stdio_client(params) as (read, write):
+        async with ClientSession(read, write, read_timeout_seconds=timedelta(seconds=10)) as client:
+            await client.initialize()
+            storage = _data(await client.call_tool("storage_status", {}))
+            assert storage["materials_dir"] == str(materials.resolve())
+            doc = _data(await client.call_tool("read_file", {"path": "lecture.txt"}))
+            assert doc["text"] == "설정으로 연결한 MCP 자료"
+            error = await client.call_tool("list_courses", {})
+            assert error.isError is True
+    assert not state.exists()
 
 
 async def test_notice_payload_and_validation_over_mcp(tmp_path, monkeypatch):
@@ -143,11 +206,15 @@ async def test_upstream_error_does_not_leak_signed_url(tmp_path, monkeypatch):
     @asynccontextmanager
     async def fake_client(self):
         request = httpx.Request("GET", "https://canvas.ssu.ac.kr/?token=secret-cookie")
-        raise httpx.HTTPStatusError("secret-cookie", request=request, response=httpx.Response(502, request=request))
+        raise httpx.HTTPStatusError(
+            "secret-cookie", request=request, response=httpx.Response(502, request=request)
+        )
         yield  # pragma: no cover
 
     monkeypatch.setattr(server.SessionManager, "client", fake_client)
-    async with create_connected_server_and_client_session(server.create_server(Settings(data_dir=tmp_path))) as client:
+    async with create_connected_server_and_client_session(
+        server.create_server(Settings(data_dir=tmp_path))
+    ) as client:
         error = await client.call_tool("list_courses", {})
         assert error.isError is True
         assert "502" in error.content[0].text
@@ -162,10 +229,19 @@ async def test_board_and_automatic_lti_over_mcp(tmp_path, monkeypatch):
         yield object()
 
     async def fake_posts(client, settings, course_id):
-        return [BoardPost(id=12, course_id=course_id, board_id=2, title="교안",
-                          attachments=[NoticeAttachment(id="91", name="slides.pdf")])]
+        return [
+            BoardPost(
+                id=12,
+                course_id=course_id,
+                board_id=2,
+                title="교안",
+                attachments=[NoticeAttachment(id="91", name="slides.pdf")],
+            )
+        ]
 
-    async def fake_download(settings, client, course_id, post_id, filename, *, attachment_id, board_id):
+    async def fake_download(
+        settings, client, course_id, post_id, filename, *, attachment_id, board_id
+    ):
         assert (course_id, post_id, filename, attachment_id, board_id) == (7, 12, None, "91", 2)
         return {"status": "saved", "path": "7/board/2/12/91.pdf"}
 
@@ -183,12 +259,22 @@ async def test_board_and_automatic_lti_over_mcp(tmp_path, monkeypatch):
     async with create_connected_server_and_client_session(mcp) as client:
         posts = _data(await client.call_tool("list_board_posts", {"course_id": 7}))
         assert posts[0]["board_id"] == 2 and posts[0]["attachments"][0]["id"] == "91"
-        result = _data(await client.call_tool("download_board_attachment", {
-            "course_id": 7, "post_id": 12, "board_id": 2, "attachment_id": "91",
-        }))
+        result = _data(
+            await client.call_tool(
+                "download_board_attachment",
+                {
+                    "course_id": 7,
+                    "post_id": 12,
+                    "board_id": 2,
+                    "attachment_id": "91",
+                },
+            )
+        )
         assert result["status"] == "saved"
         await client.call_tool("download_material", {"course_id": 7, "material_id": 8})
-        await client.call_tool("download_material", {"course_id": 7, "material_id": 8, "allow_lti": False})
+        await client.call_tool(
+            "download_material", {"course_id": 7, "material_id": 8, "allow_lti": False}
+        )
         assert lti_flags == [True, False]
 
 
@@ -199,9 +285,20 @@ async def test_http_transports_and_host_protection(tmp_path, transport):
         port = sock.getsockname()[1]
     with (tmp_path / "server.log").open("w", encoding="utf-8") as log:
         process = subprocess.Popen(
-            [sys.executable, "-m", "ssu_lms_mcp", "serve", "--transport", transport, "--port", str(port)],
-            cwd=tmp_path, env=_environment(tmp_path / "state"),
-            stdout=log, stderr=log,
+            [
+                sys.executable,
+                "-m",
+                "ssu_lms_mcp",
+                "serve",
+                "--transport",
+                transport,
+                "--port",
+                str(port),
+            ],
+            cwd=tmp_path,
+            env=_environment(tmp_path / "state"),
+            stdout=log,
+            stderr=log,
         )
         try:
             base = f"http://127.0.0.1:{port}"
@@ -218,16 +315,29 @@ async def test_http_transports_and_host_protection(tmp_path, transport):
                     pytest.fail("HTTP MCP 서버 시작 시간 초과")
                 endpoint = "/mcp" if transport == "streamable-http" else "/sse"
                 if transport == "sse":
-                    bad = await http.get(base + endpoint, headers={"Host": "attacker.example", "Accept": "text/event-stream"})
+                    bad = await http.get(
+                        base + endpoint,
+                        headers={"Host": "attacker.example", "Accept": "text/event-stream"},
+                    )
                 else:
-                    bad = await http.post(base + endpoint, headers={"Host": "attacker.example"}, json={})
+                    bad = await http.post(
+                        base + endpoint, headers={"Host": "attacker.example"}, json={}
+                    )
                 assert bad.status_code == 421
                 if transport == "streamable-http":
-                    bad = await http.post(base + endpoint, headers={"Origin": "https://attacker.example"}, json={})
+                    bad = await http.post(
+                        base + endpoint, headers={"Origin": "https://attacker.example"}, json={}
+                    )
                     assert bad.status_code == 403
-            connection = streamable_http_client(base + "/mcp") if transport == "streamable-http" else sse_client(base + "/sse")
+            connection = (
+                streamable_http_client(base + "/mcp")
+                if transport == "streamable-http"
+                else sse_client(base + "/sse")
+            )
             async with asyncio.timeout(20), connection as streams:
-                async with ClientSession(streams[0], streams[1], read_timeout_seconds=timedelta(seconds=10)) as client:
+                async with ClientSession(
+                    streams[0], streams[1], read_timeout_seconds=timedelta(seconds=10)
+                ) as client:
                     await client.initialize()
                     await _assert_session(client)
         finally:

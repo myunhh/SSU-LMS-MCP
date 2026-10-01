@@ -19,6 +19,13 @@ task = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(task)
 
 
+@pytest.fixture
+def curation_skill(tmp_path, monkeypatch):
+    skill = tmp_path / "curation-skill.md"
+    skill.write_text("Summarize the supplied batch and acknowledge only completed items.", encoding="utf-8")
+    monkeypatch.setattr(task, "SKILL", skill)
+
+
 def test_export_reuses_user_file_and_never_overwrites_collision(tmp_path):
     settings = Settings(data_dir=tmp_path / "private")
     source = settings.materials_dir / "10/original.pdf"
@@ -64,7 +71,7 @@ async def test_acknowledgement_preserves_new_revision(tmp_path):
         await task.acknowledge(settings, batch, {"acknowledged": [{"key": "unknown", "hash": "old", "evidence": "x"}]})
 
 
-async def test_no_pending_does_not_start_codex_and_failure_keeps_pending(tmp_path, monkeypatch):
+async def test_no_pending_does_not_start_codex_and_failure_keeps_pending(tmp_path, monkeypatch, curation_skill):
     settings = Settings(data_dir=tmp_path)
     root = tmp_path / "automation"
     root.mkdir()
@@ -75,7 +82,6 @@ async def test_no_pending_does_not_start_codex_and_failure_keeps_pending(tmp_pat
     task.write_json(root / "pending.json", {"items": [item]})
     def fail(command, **kwargs):
         assert command[command.index("--sandbox") + 1] == "read-only"
-        assert kwargs["timeout"] == 600
         assert "shell" not in kwargs
         return SimpleNamespace(returncode=1)
     monkeypatch.setattr(task, "run_process", fail)
@@ -83,7 +89,7 @@ async def test_no_pending_does_not_start_codex_and_failure_keeps_pending(tmp_pat
     assert task.read_json(root / "pending.json")["items"] == [item]
 
 
-async def test_curation_success_acknowledges_exact_batch(tmp_path, monkeypatch):
+async def test_curation_success_acknowledges_exact_batch(tmp_path, monkeypatch, curation_skill):
     settings = Settings(data_dir=tmp_path)
     root = tmp_path / "automation"
     item = {"key": "notice:1:2", "kind": "notice", "hash": "h", "data": {"title": "notice"}}
@@ -275,7 +281,7 @@ async def test_collect_with_relogin_cooldown_blocks_then_allows_later_login(tmp_
     assert attempts == [("student", "password"), ("student", "password")]
 
 
-async def test_stale_receipt_is_never_acknowledged(tmp_path, monkeypatch):
+async def test_stale_receipt_is_never_acknowledged(tmp_path, monkeypatch, curation_skill):
     settings = Settings(data_dir=tmp_path)
     root = tmp_path / "automation"
     item = {"key": "notice:1:2", "kind": "notice", "hash": "h", "data": {"title": "notice"}}

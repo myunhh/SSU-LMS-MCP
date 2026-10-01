@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <title>SSU 학습 라이브러리</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/vendor/markdown-it/markdown-it.umd.min.js" defer></script>
+  <script src="/vendor/dompurify/purify.min.js" defer></script>
+  <script src="/vendor/katex/katex.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="학습 라이브러리 탐색">
+      <a class="workspace" href="#/" aria-label="라이브러리 홈">
+        <span class="workspace-mark" aria-hidden="true">S</span>
+        <span><strong>SSU 학습 라이브러리</strong><small>나의 비공개 학습 공간</small></span>
+      </a>
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="제목·속성 검색" autocomplete="off" aria-label="문서 제목과 속성 검색"><kbd>/</kbd></label>
+      <div id="search-results" class="search-results" hidden aria-label="검색 결과"></div>
+      <nav id="primary-nav" class="primary-nav" aria-label="컬렉션"></nav>
+      <div class="tree-heading"><span>내 페이지</span><button id="new-sidebar" class="icon-button" title="새 페이지" aria-label="새 페이지 만들기">+</button></div>
+      <nav id="page-tree" class="page-tree" aria-label="페이지 계층"></nav>
+      <div class="sidebar-footer"><span class="private-dot" aria-hidden="true"></span><span>이 PC에서만 열리는 라이브러리<small>파일 저장 후 OneDrive 앱이 동기화합니다.</small></span></div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-button menu-toggle" title="탐색 열기/닫기" aria-label="탐색 열기/닫기" aria-expanded="false">☰</button>
+        <nav id="breadcrumbs" class="breadcrumbs" aria-label="현재 위치"></nav>
+        <div class="topbar-actions"><span id="save-status" class="save-status" role="status" aria-live="polite">연결 중</span><button id="refresh" class="quiet-button" title="저장된 문서 목록 새로고침">새로고침</button><button id="new-page" class="quiet-button">+ 새 페이지</button><button id="save" class="primary-button" disabled>문서 저장 <kbd>Ctrl S</kbd></button></div>
+      </header>
+      <div id="banner" class="banner" role="alert" hidden></div>
+      <main id="main" tabindex="-1"><div class="loading-state"><span class="loading-dot"></span><p>학습 라이브러리를 열고 있습니다.</p></div></main>
+      <footer class="document-footer"><span>PRIVATE LIBRARY</span><span id="root-path">로컬 파일 기반 · 원본 자료는 유지됩니다.</span><button id="about-button" class="text-button">사용 안내</button></footer>
+    </div>
+  </div>
+  <dialog id="new-dialog" class="modal">
+    <form id="new-form">
+      <div class="modal-heading"><h2>새 페이지</h2><button type="button" class="icon-button" data-close="new-dialog" aria-label="닫기">×</button></div>
+      <p class="muted">선택한 위치에 편집 가능한 문서를 만듭니다.</p>
+      <label class="field-label" for="new-title">제목</label><input id="new-title" required maxlength="500" autocomplete="off" placeholder="페이지 제목">
+      <label class="field-label" for="new-parent">위치</label><select id="new-parent"></select>
+      <p id="new-error" class="error-text" role="alert"></p>
+      <div class="modal-actions"><button type="button" class="quiet-button" data-close="new-dialog">취소</button><button id="create-submit" type="submit" class="primary-button">페이지 만들기</button></div>
+    </form>
+  </dialog>
+  <dialog id="conflict-dialog" class="modal conflict-modal">
+    <div class="modal-heading"><h2>다른 변경 사항이 있습니다</h2><button class="icon-button" data-close="conflict-dialog" aria-label="닫기">×</button></div>
+    <p>일일 실행 또는 다른 창에서 문서가 변경되었습니다. 내 초안은 보관되어 있으며 자동으로 덮어쓰지 않습니다.</p>
+    <div id="conflict-content"></div>
+    <div class="modal-actions"><button class="quiet-button" data-close="conflict-dialog">초안으로 돌아가기</button><button id="conflict-copy" class="quiet-button">초안을 새 페이지로 보관</button><button id="conflict-rebase" class="primary-button">선택한 내용으로 병합</button></div>
+  </dialog>
+  <dialog id="about-dialog" class="modal">
+    <div class="modal-heading"><h2>나의 학습 라이브러리</h2><button class="icon-button" data-close="about-dialog" aria-label="닫기">×</button></div>
+    <p>문서는 이 PC의 OneDrive 폴더에 저장됩니다. <strong>로컬 파일 저장 완료는 클라우드 동기화 완료를 뜻하지 않습니다.</strong> 동기화 상태는 OneDrive 앱에서 확인하세요.</p>
+    <ul class="help-list"><li><kbd>Ctrl / ⌘ + S</kbd> 문서 저장 · <kbd>/</kbd> 제목·속성 검색</li><li>본문은 전체 Markdown을 편집하며 읽기 화면에서 수식, 표, 답안 펼치기, 콜아웃을 확인합니다.</li><li>저장하지 않은 문서와 미제출 답안은 이 탭의 임시 초안으로 보관됩니다. 파일의 저장본이 기준이며 초안은 OneDrive에 동기화되지 않습니다.</li><li>복습 답안과 자기 평가는 직접 입력하고 제출하세요. 다음 학습 실행에서 처리되며 자동 채점하지 않습니다.</li><li>자동 생성 스냅샷의 경계는 읽기 화면에서 간결하게 표시됩니다. 전체 원문은 편집 화면에 그대로 남아 있습니다.</li></ul>
+    <p class="muted">로컬 런타임: markdown-it 15.0.2 · DOMPurify 3.4.16 · KaTeX 0.18.9. 네트워크/CDN을 사용하지 않습니다.</p>
+    <div class="license-links"><a href="/vendor/markdown-it/LICENSE" target="_blank" rel="noopener noreferrer">Markdown 라이선스</a><a href="/vendor/dompurify/LICENSE" target="_blank" rel="noopener noreferrer">정화 라이선스</a><a href="/vendor/katex/LICENSE" target="_blank" rel="noopener noreferrer">수식 라이선스</a><a href="/vendor/vendor-manifest.json" target="_blank" rel="noopener noreferrer">버전·무결성 목록</a></div>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="no-script">이 로컬 편집기를 사용하려면 JavaScript를 켜 주세요. 원본 문서는 OneDrive 폴더에 그대로 있습니다.</p></noscript>
+</body>
+</html>

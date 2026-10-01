@@ -145,6 +145,39 @@ async def test_lti_commons_source_is_cached_for_retry(tmp_path, monkeypatch, mat
     assert len(calls) == 2 and "content_id=opaque-id" in calls[0]
 
 
+@pytest.mark.parametrize("item_type", ["File", "ExternalTool"])
+async def test_missing_original_filename_never_becomes_a_download_label(
+    tmp_path, monkeypatch, material_module, item_type,
+):
+    settings = Settings(tmp_path)
+    launches = 0
+
+    async def listed(*args):
+        return [Material(30, item_type, content_id=99, url="https://canvas.ssu.ac.kr/tool")]
+
+    async def launched(*args):
+        nonlocal launches
+        launches += 1
+        return {"content_id": "known-file", "content_type": "file"}
+
+    async def get(*args, **kwargs):
+        return {"url": "https://canvas.ssu.ac.kr/files/99/download", "display_name": "Lecture.pdf"}
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("Unknown original filenames must not reach the binary downloader")
+
+    material_module.list_materials = listed
+    monkeypatch.setattr(downloads, "_launch_external", launched)
+    monkeypatch.setattr(downloads, "_download_url", forbidden)
+    for _ in range(2):
+        result = await downloads.download_material(settings, SimpleNamespace(get=get), 1, 30)
+        assert result["status"] == "review_required"
+        assert "path" not in result
+    assert not settings.materials_dir.exists()
+    assert launches == (1 if item_type == "ExternalTool" else 0)
+
+
+
 async def test_corrupt_manifest_fails_closed(tmp_path, material_module):
     settings = Settings(tmp_path)
     settings.data_dir.mkdir(exist_ok=True)
@@ -704,7 +737,10 @@ async def test_board_post_identity_mismatch_is_rejected(tmp_path, board_module, 
     assert result["status"] == "failed" and not settings.manifest_file.exists()
 
 
-@pytest.mark.parametrize("details", [{}, {"content_id": "movie-id", "content_type": "video"}])
+@pytest.mark.parametrize("details", [
+    {}, {"content_id": "movie-id", "content_type": "video"},
+    {"content_id": "movie-id", "content_type": "mp4"},
+])
 async def test_failed_or_video_lti_attempt_is_permanently_cached(
     tmp_path, monkeypatch, material_module, details,
 ):

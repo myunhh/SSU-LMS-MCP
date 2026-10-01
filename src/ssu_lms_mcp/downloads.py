@@ -10,7 +10,7 @@ import re
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from filelock import AsyncFileLock
@@ -18,9 +18,11 @@ from filelock import AsyncFileLock
 from .urls import FILE_HOSTS, valid_url
 
 SIZE_CAP = 80 * 1024 * 1024
-VIDEO_TYPES = {"movie", "video", "external_video", "youtube", "zoom", "vimeo"}
 ALLOWED_HOSTS = {"lms.ssu.ac.kr", "canvas.ssu.ac.kr", "commons.ssu.ac.kr", "smartid.ssu.ac.kr"}
 VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mov", ".webm", ".mkv", ".avi", ".wmv", ".flv", ".mpeg", ".mpg", ".ts", ".ogv"}
+VIDEO_TYPES = {"movie", "video", "external_video", "youtube", "zoom", "vimeo"} | {
+    extension[1:] for extension in VIDEO_EXTENSIONS
+}
 
 
 def _safe_name(value: str, fallback: str) -> str:
@@ -243,7 +245,7 @@ async def _canvas_source(client, content_id: int) -> dict:
         "source": "canvas",
         "url": str(data["url"]),
         "content_id": content_id,
-        "filename": str(data.get("filename") or data.get("display_name") or "자료"),
+        "filename": data.get("filename") if isinstance(data.get("filename"), str) else None,
     }
 
 
@@ -263,9 +265,24 @@ async def _browser_context(settings):
 
     raw = json.loads(Path(settings.session_file).read_text(encoding="utf-8"))
     async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch(headless=settings.headless)
+        browser = await playwright.chromium.launch(
+            headless=settings.headless, args=["--autoplay-policy=document-user-activation-required"]
+        )
         try:
-            yield await browser.new_context(storage_state=raw.get("storage_state", raw))
+            context = await browser.new_context(storage_state=raw.get("storage_state", raw))
+            await context.add_init_script("""
+                Object.defineProperty(HTMLMediaElement.prototype, "play", {
+                    configurable: false,
+                    value: function () {
+                        this.pause();
+                        return Promise.reject(new DOMException("Media playback disabled", "NotAllowedError"));
+                    }
+                });
+                document.addEventListener("play", event => {
+                    if (event.target instanceof HTMLMediaElement) event.target.pause();
+                }, true);
+            """)
+            yield context
         finally:
             await browser.close()
 
@@ -279,7 +296,9 @@ async def _launch_external(settings, url: str) -> dict:
         received = asyncio.Event()
 
         async def permit(route):
-            await (route.continue_() if _valid_ssu_url(route.request.url) else route.abort())
+            path = urlparse(route.request.url).path.lower()
+            media = route.request.resource_type == "media" or Path(path).suffix in VIDEO_EXTENSIONS | {".m3u8", ".mpd", ".m4s"}
+            await (route.continue_() if not media and _valid_ssu_url(route.request.url) else route.abort())
 
         async def capture(response):
             if "/attendance_items/" in response.url and _valid_ssu_url(response.url):
@@ -350,7 +369,7 @@ async def download_material(
             details = await _launch_external(settings, str(_item_value(item, "url", "")))
             content_id, content_type = (
                 details.get("content_id"),
-                (details.get("content_type") or "").lower(),
+                str(details.get("content_type") or "").strip().lower(),
             )
             if not content_id or content_type in VIDEO_TYPES:
                 reason = (
@@ -359,7 +378,10 @@ async def download_material(
                     else "LTI에서 파일 정보를 찾지 못했습니다."
                 )
                 await _manifest_update(
-                    settings, key, {"status": "skipped", "lti_attempted": True, "reason": reason}
+                    settings, key, {
+                        "status": "skipped", "lti_attempted": True,
+                        "content_type": content_type, "reason": reason,
+                    }
                 )
                 return {**base, "status": "skipped", "reason": reason}
             resolved = {
@@ -367,7 +389,9 @@ async def download_material(
                 "lti_attempted": True,
                 "source": "commons",
                 "content_id": str(content_id),
-                "filename": str(details.get("file_name") or "자료"),
+                "content_type": content_type,
+                "filename": details.get("file_name") if isinstance(details.get("file_name"), str) else None,
+                "filename_verified": isinstance(details.get("file_name"), str) and bool(details["file_name"]),
                 "url": _commons_url(str(content_id)),
             }
             await _manifest_update(settings, key, resolved)
@@ -382,13 +406,15 @@ async def download_material(
             resolved = await _canvas_source(client, int(content_id))
             resolved["status"] = "resolved"
             await _manifest_update(settings, key, resolved)
+        if not resolved.get("filename"):
+            return {**base, "status": "review_required", "reason": "original_filename_missing"}
         destination = _destination(
             settings,
             course_id,
             str(_item_value(item, "module_name", "자료")),
             str(_item_value(item, "title", "자료")),
             material_id,
-            str(resolved.get("filename") or "자료"),
+            resolved["filename"],
         )
         if destination.exists():
             status, reason = "skipped", "저장 위치에 같은 이름의 파일이 있어 덮어쓰지 않았습니다. 기존 파일을 확인하세요."

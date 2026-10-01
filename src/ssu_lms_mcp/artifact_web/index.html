@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="referrer" content="no-referrer">
+  <title>AI 산출물 · SSU</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/artifact-index.css">
+  <script src="/artifact-index.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="AI 산출물 홈"><span class="mark">A</span><span>SSU 산출물 보관소</span></a>
+      <a class="secondary-link" href="/study.html">기존 학습 자동화 자료 ↗</a>
+    </header>
+    <section class="intro" aria-labelledby="title">
+      <p class="eyebrow">AI OUTPUTS · ONEDRIVE</p>
+      <h1 id="title">AI 산출물</h1>
+      <p class="lead">파일 형식은 제한하지 않습니다. 생성된 파일을 아래 폴더에 넣으면 원본 형식 그대로 링크로 나타납니다. Markdown 변환이나 노션 페이지가 필요하지 않습니다.</p>
+      <div class="location"><span>저장 폴더</span><code id="root-path">연결 중…</code><span id="artifact-count" role="status"></span></div>
+    </section>
+    <section class="outputs" aria-labelledby="outputs-title">
+      <div class="section-heading"><div><p class="eyebrow">FILES</p><h2 id="outputs-title">저장된 파일</h2></div><button id="refresh" type="button">새로고침</button></div>
+      <div id="artifact-list" aria-live="polite"><p class="empty">파일 목록을 불러오는 중…</p></div>
+      <div id="error" class="error" role="alert" hidden></div>
+    </section>
+    <footer>이 PC의 로컬 저장본을 제공하며, OneDrive 클라우드 동기화는 OneDrive 앱에서 확인하세요.</footer>
+  </main>
+</body>
+</html>
